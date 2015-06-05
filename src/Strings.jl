@@ -34,7 +34,7 @@ immutable String{T<:Encoding}
   len::Int
 end
 
-function ==(a::String, b::String)
+function =={T}(a::String{T}, b::String{T})
     na = sizeof(a)
     nb = sizeof(b)
     na != nb && return false
@@ -79,20 +79,6 @@ function storebytes!(s::Ptr{UInt8},n::Int,offset::Int=1)
     ptr = pointer(POOL.pool[POOL.ind])+UInt(POOL.pos)
     unsafe_copy!(ptr, s+UInt(offset), n)
     return ptr, n
-end
-function storebytes!{N}(ptrs::NTuple{N,Ptr{UInt8}},lens::NTuple{N,Int})
-    @inbounds begin
-    n = prod(lens)
-    ensureroom!(n)
-    # unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
-    starting_ptr = pointer(POOL.pool[POOL.ind])+UInt(POOL.pos)
-    ptr = starting_ptr
-    for i = 1:N
-        unsafe_copy!(ptr, ptrs[i], lens[i])
-        ptr += lens[i]
-    end
-    end
-    return starting_ptr, n
 end
 function storebytes!(s::Vector{UInt8},n::Int,offset::Int=1)
     ensureroom!(n)
