@@ -1,33 +1,6 @@
 module Strings
 
-using Compat, Mmap
-
-abstract Encoding
-abstract DirectIndexedEncoding <: Encoding
-
-immutable ASCII  <: DirectIndexedEncoding end
-immutable Latin1 <: DirectIndexedEncoding end
-
-immutable UTF8    <: Encoding end
-immutable UTF16LE <: Encoding end
-immutable UTF32LE <: DirectIndexedEncoding end
-immutable UCS2LE  <: DirectIndexedEncoding end
-
-immutable UTF16BE <: Encoding end
-immutable UTF32BE <: DirectIndexedEncoding end
-immutable UCS2BE  <: DirectIndexedEncoding end
-
-if ENDIAN_BOM == 0x01020304
-    typealias UTF16 UTF16BE
-    typealias UTF32 UTF32BE
-    typealias UCS2 UCS2BE
-elseif ENDIAN_BOM == 0x04030201
-    typealias UTF16 UTF16LE
-    typealias UTF32 UTF32LE
-    typealias UCS2 UCS2LE
-else
-    error("seriously? what is this machine?")
-end
+using Compat, Mmap, Encodings
 
 immutable String{T<:Encoding}
   ptr::Ptr{UInt8}
