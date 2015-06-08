@@ -1,6 +1,6 @@
 module Strings
 
-using Compat, Mmap, Encodings
+using Compat, Mmap, Encodings, CheckStrings
 
 immutable String{T<:Encoding}
   ptr::Ptr{UInt8}
