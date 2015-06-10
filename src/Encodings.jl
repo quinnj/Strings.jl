@@ -1,15 +1,6 @@
-module Encodings
-
-export Encoding
-export Binary, ASCII, Latin1, UTF8      # 7/8-bit encodings
-export UCS2, UCS2LE, UCS2BE, UCS2OE     # 16-bit encodings (16-bit subset of Unicode)
-export UTF16, UTF16LE, UTF16BE, UTF16OE # 16-bit encodings
-export UTF32, UTF32LE, UTF32BE, UTF32OE # 32-bit encodings
-
 abstract Encoding
 abstract DirectIndexedEncoding <: Encoding
 
-immutable Binary  <: DirectIndexedEncoding end
 immutable ASCII   <: DirectIndexedEncoding end
 immutable Latin1  <: DirectIndexedEncoding end
 
@@ -37,7 +28,18 @@ elseif ENDIAN_BOM == 0x04030201
     typealias UTF32OE UTF32BE
     typealias UCS2OE  UCS2BE
 else
-    # Somebody must have decided to port Julia to a PDP-11!
     error("seriously? what is this machine?")
 end
-end
+
+codeunit(::Type{ASCII})   = UInt8
+codeunit(::Type{Latin1})  = UInt8
+codeunit(::Type{UTF8})    = UInt8
+codeunit(::Type{UTF16LE}) = UInt16
+codeunit(::Type{UTF32LE}) = UInt32
+codeunit(::Type{UCS2LE})  = UInt16
+codeunit(::Type{UTF16BE}) = UInt16
+codeunit(::Type{UTF32BE}) = UInt32
+codeunit(::Type{UCS2BE})  = UInt16
+
+# size of code unit in bytes
+Base.sizeof{E<:Encoding}(::Type{E}) = sizeof(codeunit(E))
