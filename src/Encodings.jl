@@ -1,45 +1,69 @@
+#=
+module Encodings
+
+export Encoding
+export Binary, ASCII, Latin1, UTF8      # 7/8-bit encodings
+export UCS2, UCS2LE, UCS2BE, UCS2OE     # 16-bit encodings (16-bit subset of Unicode)
+export UTF16, UTF16LE, UTF16BE, UTF16OE # 16-bit encodings
+export UTF32, UTF32LE, UTF32BE, UTF32OE # 32-bit encodings
+export BIG_ENDIAN
+export native_endian, big_endian, codeunit
+=#
+
 abstract Encoding
 abstract DirectIndexedEncoding <: Encoding
 
-immutable ASCII   <: DirectIndexedEncoding end
-immutable Latin1  <: DirectIndexedEncoding end
+abstract Binary <: DirectIndexedEncoding
+abstract ASCII  <: DirectIndexedEncoding
+abstract Latin1 <: DirectIndexedEncoding
 
-immutable UTF8    <: Encoding end
-immutable UTF16LE <: Encoding end
-immutable UTF32LE <: DirectIndexedEncoding end
-immutable UCS2LE  <: DirectIndexedEncoding end
+abstract UTF8   <: Encoding
+abstract UTF16  <: Encoding
+abstract UTF32  <: DirectIndexedEncoding
+abstract UCS2   <: DirectIndexedEncoding
 
-immutable UTF16BE <: Encoding end
-immutable UTF32BE <: DirectIndexedEncoding end
-immutable UCS2BE  <: DirectIndexedEncoding end
+# Opposite endian encodings of 16-bit and 32-bit encodings
+abstract UTF16OE <: UTF16
+abstract UTF32OE <: UTF32
+abstract UCS2OE  <: UCS2
 
-if ENDIAN_BOM == 0x01020304
-    typealias UTF16   UTF16BE
-    typealias UTF32   UTF32BE
-    typealias UCS2    UCS2BE
-    typealias UTF16OE UTF16LE
-    typealias UTF32OE UTF32LE
-    typealias UCS2OE  UCS2LE
-elseif ENDIAN_BOM == 0x04030201
-    typealias UTF16   UTF16LE
-    typealias UTF32   UTF32LE
-    typealias UCS2    UCS2LE
-    typealias UTF16OE UTF16BE
-    typealias UTF32OE UTF32BE
-    typealias UCS2OE  UCS2BE
+# This is easier to use (and not get the ordering mixed up) than ENDIAN_BOM
+const BIG_ENDIAN = reinterpret(UInt32,UInt8[1:4;])[1] == 0x01020304
+
+if BIG_ENDIAN
+    abstract UTF16BE <: UTF16
+    abstract UTF32BE <: UTF32
+    abstract UCS2BE  <: UCS2
+    abstract UTF16LE <: UTF16OE
+    abstract UTF32LE <: UTF32OE
+    abstract UCS2LE  <: UCS2OE
 else
-    error("seriously? what is this machine?")
+    abstract UTF16LE <: UTF16
+    abstract UTF32LE <: UTF32
+    abstract UCS2LE  <: UCS2
+    abstract UTF16BE <: UTF16OE
+    abstract UTF32BE <: UTF32OE
+    abstract UCS2BE  <: UCS2OE
 end
 
-codeunit(::Type{ASCII})   = UInt8
-codeunit(::Type{Latin1})  = UInt8
-codeunit(::Type{UTF8})    = UInt8
-codeunit(::Type{UTF16LE}) = UInt16
-codeunit(::Type{UTF32LE}) = UInt32
-codeunit(::Type{UCS2LE})  = UInt16
-codeunit(::Type{UTF16BE}) = UInt16
-codeunit(::Type{UTF32BE}) = UInt32
-codeunit(::Type{UCS2BE})  = UInt16
+native_endian{E <: Encoding}(::Type{E}) = true
+native_endian{E <: UTF16OE}(::Type{E})  = false
+native_endian{E <: UTF32OE}(::Type{E})  = false
+native_endian{E <: UCS2OE}(::Type{E})   = false
+
+if BIG_ENDIAN
+big_endian{E <: Encoding}(::Type{E}) = native_endian(E)
+else
+big_endian{E <: Encoding}(::Type{E}) = !native_endian(E)
+end
+
+codeunit{E <: ASCII}(::Type{E})  = UInt8
+codeunit{E <: Latin1}(::Type{E}) = UInt8
+codeunit{E <: UTF8}(::Type{E})   = UInt8
+codeunit{E <: UTF16}(::Type{E})  = UInt16
+codeunit{E <: UCS2}(::Type{E})   = UInt16
+codeunit{E <: UTF32}(::Type{E})  = UInt32
 
 # size of code unit in bytes
-Base.sizeof{E<:Encoding}(::Type{E}) = sizeof(codeunit(E))
+Base.sizeof{E <: Encoding}(::Type{E}) = sizeof(codeunit(E))
+#end
