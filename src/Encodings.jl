@@ -66,4 +66,5 @@ codeunit{E <: UTF32}(::Type{E})  = UInt32
 
 # size of code unit in bytes
 Base.sizeof{E <: Encoding}(::Type{E}) = sizeof(codeunit(E))
+
 #end
