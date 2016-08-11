@@ -1,1 +1,1 @@
-isvalid(::Type{ASCII}, c::Chars) = c < 0x80
+isvalid(::Type{ASCII}, c::CodeUnits) = c < 0x80

@@ -11,16 +11,16 @@ export native_endian, big_endian, codeunit
 =#
 
 abstract Encoding
-abstract DirectIndexedEncoding <: Encoding
+abstract DirectIndexEncoding <: Encoding
 
-abstract Binary <: DirectIndexedEncoding
-abstract ASCII  <: DirectIndexedEncoding
-abstract Latin1 <: DirectIndexedEncoding
+abstract Binary <: DirectIndexEncoding
+abstract ASCII  <: DirectIndexEncoding
+abstract Latin1 <: DirectIndexEncoding
 
 abstract UTF8   <: Encoding
 abstract UTF16  <: Encoding
-abstract UTF32  <: DirectIndexedEncoding
-abstract UCS2   <: DirectIndexedEncoding
+abstract UTF32  <: DirectIndexEncoding
+abstract UCS2   <: DirectIndexEncoding
 
 # Opposite endian encodings of 16-bit and 32-bit encodings
 abstract UTF16OE <: UTF16

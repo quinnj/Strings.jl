@@ -1,9 +1,12 @@
-typealias Chars Union(UInt8,UInt16,UInt32,Char)
+typealias CodeUnits Union(UInt8,UInt16,UInt32,Char)
 
 immutable String{E<:Encoding}
   ptr::Ptr{E} # pointer to code units of encoding E
   len::Int    # number of code units
 end
+
+String(x::String) = x
+String{E<:Encoding}(::Type{E}=UTF8) = String(convert(Ptr{E},C_NULL), 0)
 
 # core access method; unsafe if !(0 < i < s.len)
 getcodeunit{E}(s::String{E},i::Integer=1) = unsafe_load(convert(Ptr{codeunit(E)},s.ptr), i)
@@ -17,35 +20,33 @@ String{E<:Encoding}(::Type{E}, ptr::Ptr, len::Int) = String(convert(Ptr{E},ptr),
 #     # look for NUL terminate
 # end
 
-emtpy{E<:Encoding}(::Type{E}) = String(convert(Ptr{E},C_NULL), 0)
-
-function String{E<:Encoding,C<:Chars}(::Type{E}, s::Vector{C})
+function String{E<:Encoding,C<:CodeUnits}(::Type{E}, s::Vector{C})
     # isvalid(E, s) || throw(ArgumentError("vector is not valid $E"))
     ptr, len = storebytes!(s)
     return String{E}(convert(Ptr{E},ptr),div(len,sizeof(E)))
 end
 
 # TODO: remove when no longer needed
-String(s::ASCIIString) = String(ASCII,s.data)
-String(s::UTF8String)  = String(UTF8, s.data)
-String(s::UTF16String) = String(UTF16,s.data)
-String(s::UTF32String) = String(UTF32,s.data)
+String(s::ASCIIString) = String(ASCII, s.data)
+String(s::UTF8String)  = String(UTF8,  s.data)
+String(s::UTF16String) = String(UTF16, s.data)
+String(s::UTF32String) = String(UTF32, s.data)
 
 # indexing by code point
-# DirectIndexedEncoding: code unit == code point
-Base.getindex{E<:DirectIndexedEncoding}(s::String{E}, i::Integer=1) = (c = getcodeunit(s, i); isvalid(E, c) ? Char(c) : '\uffd')
-Base.endof{E<:DirectIndexedEncoding}(s::String{E}) = codeunits(s)
-Base.length{E<:DirectIndexedEncoding}(s::String{E}) = codeunits(s)
+# DirectIndexEncoding: code unit == code point
+Base.getindex{E<:DirectIndexEncoding}(s::String{E}, i::Integer=1) = (c = getcodeunit(s, i); ifelse(isvalid(E, c), Char(c), '\uffd'))
+Base.endof{E<:DirectIndexEncoding}(s::String{E}) = codeunits(s)
+Base.length{E<:DirectIndexEncoding}(s::String{E}) = codeunits(s)
 
 # substring
-function Base.getindex{E<:DirectIndexedEncoding}(s::String{E}, r::UnitRange{Int})
+function Base.getindex{E<:DirectIndexEncoding}(s::String{E}, r::UnitRange{Int})
     n = length(r)
-    (0 < first(r) <= endof(s) && last(r) <= endof(s)) || throw(BoundsError())
     isempty(r) && return empty(E)
+    (0 < first(r) <= endof(s) && last(r) <= endof(s)) || throw(BoundsError())
 
     if n < div(endof(s),4) || n < 16 # < 25% of original string size or really small
         # just make a copy
-        ptr, len = storebytes!(convert(Ptr{UInt8},s.ptr), n, first(r)-1)
+        ptr, len = storebytes!(convert(Ptr{UInt8},s.ptr), n * sizeof(codeunit(E)), first(r)-1)
         return String(E, ptr, len)
     else
         # share data with original string
@@ -74,11 +75,11 @@ Base.done(s::String, i::Integer) = i > endof(s)
 Base.next(s::String, i::Integer) = (getindex(s, i), i+1)
 
 function =={E}(a::String{E}, b::String{E})
-    na = sizeof(a)
-    nb = sizeof(b)
+    na = length(a)
+    nb = length(b)
     na != nb && return false
     c = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-              a.ptr, b.ptr, min(na,nb))
+              a.ptr, b.ptr, na * sizeof(codeunit(E)))
     return c == 0
 end
 
@@ -109,9 +110,20 @@ function Base.string{E}(strs::String{E}...)
     starting_ptr = pointer(POOL.pool[POOL.ind])+UInt(POOL.pos)
     ptr = starting_ptr
     for i = 1:N
-        unsafe_copy!(ptr, convert(Ptr{UInt8},strs[i].ptr), sizeof(E) * strs[i].len)
-        ptr += strs[i].len
+        unsafe_copy!(ptr, convert(Ptr{UInt8},strs[i].ptr), sizeof(E) * codeunits(strs[i]))
+        ptr += codeunits(strs[i])
     end
     end
     return String{E}(starting_ptr,n)
+end
+
+# contains
+Base.contains(haystack::String, needle::String) = searchindex(haystack,needle,1)!=0
+function Base.searchindex(s::String, t::String, i::Integer=1)
+    if length(t) == 1
+        search(s,t[1],i)
+    else
+        searchindex(pointer_to_array(convert(Ptr{UInt8},s.ptr), (s.len,)),
+                    pointer_to_array(convert(Ptr{UInt8},t.ptr), (t.len,)), i)
+    end
 end

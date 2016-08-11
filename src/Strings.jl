@@ -1,41 +1,61 @@
 module Strings
 
-using Compat, Mmap
+using Compat
 
 # this would be handled by native Julia GC, but we'll roll our own for now
 const PAGESIZE = @compat Int(@unix ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
 
-type StringPool
-    pool::Vector{Vector{UInt8}}
-    ind::Int
+type MemoryBlock
+    ptr::Ptr{UInt8}
+    len::Int
     pos::Int
-end
-
-const POOL = StringPool(Any[Mmap.mmap(UInt8,PAGESIZE)],1,1)
-
-function ensureroom!(n::Int)
-    if POOL.pos + n < PAGESIZE
-        # we have enough room to allocate `n` bytes
-        return
-    elseif n < PAGESIZE
-        # we're hitting a page boundary
-        push!(POOL.pool,Mmap.mmap(UInt8,PAGESIZE))
-        POOL.ind += 1
-        POOL.pos = 1
-        return
-    elseif n > PAGESIZE
-        totalneededbytes = (div(n, PAGESIZE) + 1) * PAGESIZE
-        push!(POOL.pool,Mmap.mmap(UInt8,totalneededbytes))
-        POOL.ind += 1
-        POOL.pos = 1
-        return
+    rc::Int
+    function MemoryBlock(n::Integer=PAGESIZE)
+        mb = new(Libc.malloc(n), n, 1, 0)
+        finalizer(mb,x->free(mb.ptr))
+        return mb
     end
 end
 
+immutable MemoryPool
+    pool::Vector{MemoryBlock}
+    space::Vector{UInt16}
+end
+
+const POOL = MemoryPool([MemoryBlock()],[PAGESIZE])
+
+# Find room for `n` bytes to store; returns a pointer::Ptr{UInt8} to a chunk of `n` bytes
+function findroom!(n::Int)
+    # we know we're not going to have existing space for large chunks
+    if n < PAGESIZE
+        i = 1
+        for i = 1:length(POOL.space)
+            if POOL.space[i] >= n
+                # we found room for `n` bytes
+                mb = POOL.pool[i]
+                mb.rc += 1 # increase the MemoryBlock's ref count
+                pos = mb.pos
+                mb.pos += n # increase the current position in the MemoryBlock
+                POOL.space[i] -= n # decrease the available space in the MemoryBlock
+                return mb.ptr + pos - 1
+            end
+        end
+    end
+    # we didn't find `n` bytes available in any existing MemoryBlocks
+    # or `n` >= PAGESIZE anyway
+    # we need a big chunk of memory
+    aligned = div(n, PAGESIZE) * PAGESIZE # need to PAGESIZE align `n`
+    mb = MemoryPool(aligned)
+    mb.rc += 1
+    mb.pos += n
+    push!(POOL.pool, mb)
+    push!(POOL.space, aligned - n)
+    return mb.ptr
+end
+
 function storebytes!(s::Ptr{UInt8},n::Int,offset::Int=0)
-    ensureroom!(n)
+    ptr = findroom!(n)
     # unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
-    ptr = pointer(POOL.pool[POOL.ind])+UInt(POOL.pos)
     unsafe_copy!(ptr, s+UInt(offset), n)
     return ptr, n
 end
